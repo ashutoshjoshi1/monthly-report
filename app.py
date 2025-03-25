@@ -79,7 +79,6 @@ if uploaded_file is not None:
     ]
     
     ax.bar(monthly_report_df.index, monthly_report_df["Good Scan (%)"], color=bar_colors)
-    
     ax.set_xlabel("Year-Month")
     ax.set_ylabel("Percentage of Good Scans")
     ax.set_title("Monthly Report of Pandora Alignments")
@@ -94,22 +93,23 @@ if uploaded_file is not None:
     # Threshold line
     ax.axhline(y=threshold, color='gray', linestyle='--', label="Threshold")
     ax.legend()
-    
     plt.tight_layout()
     
     st.pyplot(fig)
-    
-    # Display the monthly report table
     st.dataframe(monthly_report_df)
     
     # --- Weekly Chart with Date Range Filter ---
     st.subheader("Weekly Good Scan Report (Date Range Filter)")
     
-    # Determine min/max dates
+    # Determine min/max dates from the data (convert to Python date)
     min_date = df["UT date and time (ISO 8601)"].min()
     max_date = df["UT date and time (ISO 8601)"].max()
     
-    if pd.isnull(min_date) or pd.isnull(max_date):
+    # Convert to Python date objects
+    min_date = min_date.date() if pd.notnull(min_date) else None
+    max_date = max_date.date() if pd.notnull(max_date) else None
+    
+    if min_date is None or max_date is None:
         st.warning("No valid dates found in the uploaded file.")
     else:
         # Ask user for a date range filter
@@ -121,18 +121,15 @@ if uploaded_file is not None:
             format="YYYY-MM-DD"
         )
         
-        # Filter df by date range
+        # Filter df by date range (convert Timestamps to date for comparison)
         df_filtered = df[
-            (df["UT date and time (ISO 8601)"] >= start_date) &
-            (df["UT date and time (ISO 8601)"] <= end_date)
+            (df["UT date and time (ISO 8601)"].dt.date >= start_date) &
+            (df["UT date and time (ISO 8601)"].dt.date <= end_date)
         ]
         
         if not df_filtered.empty:
-            # Group by year-week
-            # dt.isocalendar().week gives ISO week number
-            # Alternatively, we can use dt.strftime("%Y-%U") for "Year-Week" (Sunday-based)
+            # Group by year-week (using strftime for Year-Week, Sunday as first day)
             df_filtered["Year-Week"] = df_filtered["UT date and time (ISO 8601)"].dt.strftime("%Y-%U")
-            
             weekly_report = df_filtered.groupby("Year-Week")["Good Scan"].mean() * 100
             weekly_report_df = weekly_report.reset_index()
             weekly_report_df.columns = ["Year-Week", "Good Scan (%)"]
@@ -148,19 +145,14 @@ if uploaded_file is not None:
             ax2.set_xlabel("Year-Week")
             ax2.set_ylabel("Percentage of Good Scans")
             ax2.set_title("Weekly Good Scan Report")
-            
-            # Use Year-Week as x-tick labels
             ax2.set_xticks(weekly_report_df.index)
             ax2.set_xticklabels(weekly_report_df["Year-Week"], rotation=45)
             ax2.set_ylim(0, 100)
-            
-            # Threshold line
             ax2.axhline(y=threshold, color='gray', linestyle='--', label="Threshold")
             ax2.legend()
             
             plt.tight_layout()
             st.pyplot(fig2)
-            
             st.dataframe(weekly_report_df)
         else:
             st.info("No data found for the selected date range.")
