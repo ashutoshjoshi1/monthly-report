@@ -14,7 +14,7 @@ column_names = [
     "Weighting factor"
 ]
 
-st.set_page_config(page_title="Monthly & Weekly Report - Pandora Alignments", layout="centered")
+st.set_page_config(page_title="Monthly & Daily Report - Pandora Alignments", layout="centered")
 st.title("Pandora Alignments Report")
 
 uploaded_file = st.file_uploader("Upload your Pandora alignment .txt file", type=["txt"])
@@ -87,10 +87,9 @@ if uploaded_file is not None:
     x_labels = [f"{row.Year}-{row.Month}" for _, row in monthly_report_df.iterrows()]
     ax.set_xticks(monthly_report_df.index)
     ax.set_xticklabels(x_labels, rotation=45)
-    
     ax.set_ylim(0, 100)
     
-    # Threshold line
+    # Draw threshold line
     ax.axhline(y=threshold, color='gray', linestyle='--', label="Threshold")
     ax.legend()
     plt.tight_layout()
@@ -98,21 +97,19 @@ if uploaded_file is not None:
     st.pyplot(fig)
     st.dataframe(monthly_report_df)
     
-    # --- Weekly Chart with Date Range Filter ---
-    st.subheader("Weekly Good Scan Report (Date Range Filter)")
+    # --- Daily Chart with Date Range Filter ---
+    st.subheader("Daily Good Scan Report (Date Range Filter)")
     
-    # Determine min/max dates from the data (convert to Python date)
+    # Determine min and max dates (convert to Python date objects)
     min_date = df["UT date and time (ISO 8601)"].min()
     max_date = df["UT date and time (ISO 8601)"].max()
-    
-    # Convert to Python date objects
     min_date = min_date.date() if pd.notnull(min_date) else None
     max_date = max_date.date() if pd.notnull(max_date) else None
     
     if min_date is None or max_date is None:
         st.warning("No valid dates found in the uploaded file.")
     else:
-        # Ask user for a date range filter
+        # Allow user to select a date range
         start_date, end_date = st.slider(
             "Select date range",
             min_value=min_date,
@@ -121,41 +118,41 @@ if uploaded_file is not None:
             format="YYYY-MM-DD"
         )
         
-        # Filter df by date range (convert Timestamps to date for comparison)
+        # Filter DataFrame by the selected date range
         df_filtered = df[
             (df["UT date and time (ISO 8601)"].dt.date >= start_date) &
             (df["UT date and time (ISO 8601)"].dt.date <= end_date)
         ]
         
         if not df_filtered.empty:
-            # Group by year-week (using strftime for Year-Week, Sunday as first day)
-            df_filtered["Year-Week"] = df_filtered["UT date and time (ISO 8601)"].dt.strftime("%Y-%U")
-            weekly_report = df_filtered.groupby("Year-Week")["Good Scan"].mean() * 100
-            weekly_report_df = weekly_report.reset_index()
-            weekly_report_df.columns = ["Year-Week", "Good Scan (%)"]
+            # Group by day (using the date part only)
+            daily_report = df_filtered.groupby(df_filtered["UT date and time (ISO 8601)"].dt.date)["Good Scan"].mean() * 100
+            daily_report_df = daily_report.reset_index()
+            daily_report_df.columns = ["Date", "Good Scan (%)"]
             
             fig2, ax2 = plt.subplots(figsize=(12, 5))
             # Color bars based on threshold
-            bar_colors2 = [
-                "red" if pct < threshold else "green"
-                for pct in weekly_report_df["Good Scan (%)"]
-            ]
+            bar_colors2 = ["red" if pct < threshold else "green" for pct in daily_report_df["Good Scan (%)"]]
             
-            ax2.bar(weekly_report_df.index, weekly_report_df["Good Scan (%)"], color=bar_colors2)
-            ax2.set_xlabel("Year-Week")
+            # Plot the daily values; use the date string as x-axis labels
+            ax2.bar(daily_report_df["Date"].astype(str), daily_report_df["Good Scan (%)"], color=bar_colors2)
+            ax2.set_xlabel("Date")
             ax2.set_ylabel("Percentage of Good Scans")
-            ax2.set_title("Weekly Good Scan Report")
-            ax2.set_xticks(weekly_report_df.index)
-            ax2.set_xticklabels(weekly_report_df["Year-Week"], rotation=45)
+            ax2.set_title("Daily Report of Pandora Alignments")
             ax2.set_ylim(0, 100)
+            
+            # Draw threshold line
             ax2.axhline(y=threshold, color='gray', linestyle='--', label="Threshold")
             ax2.legend()
             
+            # Rotate x-axis labels for better readability
+            plt.xticks(rotation=45)
             plt.tight_layout()
+            
             st.pyplot(fig2)
-            st.dataframe(weekly_report_df)
+            st.dataframe(daily_report_df)
         else:
             st.info("No data found for the selected date range.")
     
 else:
-    st.write("Please upload a `.txt` file to generate the monthly and weekly reports.")
+    st.write("Please upload a `.txt` file to generate the monthly and daily reports.")
