@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 # Column names for the data file
 column_names = [
@@ -95,7 +96,7 @@ if uploaded_file is not None:
     plt.tight_layout()
     
     st.pyplot(fig)
-    st.dataframe(monthly_report_df)
+    # st.dataframe(monthly_report_df)
     
     # --- Daily Chart with Date Range Filter ---
     st.subheader("Daily Good Scan Report (Date Range Filter)")
@@ -130,12 +131,16 @@ if uploaded_file is not None:
             daily_report_df = daily_report.reset_index()
             daily_report_df.columns = ["Date", "Good Scan (%)"]
             
+            # Convert the "Date" column back to datetime for proper date plotting
+            daily_report_df["Date"] = pd.to_datetime(daily_report_df["Date"])
+            
             fig2, ax2 = plt.subplots(figsize=(12, 5))
+            
             # Color bars based on threshold
             bar_colors2 = ["red" if pct < threshold else "green" for pct in daily_report_df["Good Scan (%)"]]
             
-            # Plot the daily values; use the date string as x-axis labels
-            ax2.bar(daily_report_df["Date"].astype(str), daily_report_df["Good Scan (%)"], color=bar_colors2)
+            # Plot daily values using datetime objects for the x-axis
+            ax2.bar(daily_report_df["Date"], daily_report_df["Good Scan (%)"], color=bar_colors2, width=0.8)
             ax2.set_xlabel("Date")
             ax2.set_ylabel("Percentage of Good Scans")
             ax2.set_title("Daily Report of Pandora Alignments")
@@ -145,12 +150,15 @@ if uploaded_file is not None:
             ax2.axhline(y=threshold, color='gray', linestyle='--', label="Threshold")
             ax2.legend()
             
-            # Rotate x-axis labels for better readability
-            plt.xticks(rotation=45)
-            plt.tight_layout()
+            # Use Matplotlib's date locators and formatters to set x-axis intervals
+            locator = mdates.AutoDateLocator(minticks=3, maxticks=10)
+            formatter = mdates.ConciseDateFormatter(locator)
+            ax2.xaxis.set_major_locator(locator)
+            ax2.xaxis.set_major_formatter(formatter)
             
+            plt.tight_layout()
             st.pyplot(fig2)
-            st.dataframe(daily_report_df)
+            # st.dataframe(daily_report_df)
         else:
             st.info("No data found for the selected date range.")
     
