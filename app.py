@@ -14,8 +14,8 @@ column_names = [
     "Weighting factor"
 ]
 
-st.set_page_config(page_title="Monthly Report - Pandora Alignments", layout="centered")
-st.title("Monthly Report of Pandora Alignments")
+st.set_page_config(page_title="Monthly & Weekly Report - Pandora Alignments", layout="centered")
+st.title("Pandora Alignments Report")
 
 uploaded_file = st.file_uploader("Upload your Pandora alignment .txt file", type=["txt"])
 
@@ -56,7 +56,7 @@ if uploaded_file is not None:
     # Flag "Good Scan" rows (True if above average weighting factor)
     df["Good Scan"] = df["Weighting factor"] > average_weighting_factor
     
-    # Extract Year and Month
+    # Extract Year and Month for monthly aggregation
     df["Year"] = df["UT date and time (ISO 8601)"].dt.year
     df["Month"] = df["UT date and time (ISO 8601)"].dt.month
     
@@ -68,8 +68,9 @@ if uploaded_file is not None:
     # Let user pick threshold (default 21)
     threshold = st.number_input("Threshold for Good Scans (%)", value=21, min_value=0, max_value=100)
     
-    # Plot with matplotlib
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # --- Monthly Chart ---
+    st.subheader("Monthly Good Scan Report")
+    fig, ax = plt.subplots(figsize=(12, 5))
     
     # Color bars based on threshold
     bar_colors = [
@@ -96,11 +97,73 @@ if uploaded_file is not None:
     
     plt.tight_layout()
     
-    # Display the plot
     st.pyplot(fig)
     
     # Display the monthly report table
-    st.subheader("Monthly Report Data")
     st.dataframe(monthly_report_df)
+    
+    # --- Weekly Chart with Date Range Filter ---
+    st.subheader("Weekly Good Scan Report (Date Range Filter)")
+    
+    # Determine min/max dates
+    min_date = df["UT date and time (ISO 8601)"].min()
+    max_date = df["UT date and time (ISO 8601)"].max()
+    
+    if pd.isnull(min_date) or pd.isnull(max_date):
+        st.warning("No valid dates found in the uploaded file.")
+    else:
+        # Ask user for a date range filter
+        start_date, end_date = st.slider(
+            "Select date range",
+            min_value=min_date,
+            max_value=max_date,
+            value=(min_date, max_date),
+            format="YYYY-MM-DD"
+        )
+        
+        # Filter df by date range
+        df_filtered = df[
+            (df["UT date and time (ISO 8601)"] >= start_date) &
+            (df["UT date and time (ISO 8601)"] <= end_date)
+        ]
+        
+        if not df_filtered.empty:
+            # Group by year-week
+            # dt.isocalendar().week gives ISO week number
+            # Alternatively, we can use dt.strftime("%Y-%U") for "Year-Week" (Sunday-based)
+            df_filtered["Year-Week"] = df_filtered["UT date and time (ISO 8601)"].dt.strftime("%Y-%U")
+            
+            weekly_report = df_filtered.groupby("Year-Week")["Good Scan"].mean() * 100
+            weekly_report_df = weekly_report.reset_index()
+            weekly_report_df.columns = ["Year-Week", "Good Scan (%)"]
+            
+            fig2, ax2 = plt.subplots(figsize=(12, 5))
+            # Color bars based on threshold
+            bar_colors2 = [
+                "red" if pct < threshold else "green"
+                for pct in weekly_report_df["Good Scan (%)"]
+            ]
+            
+            ax2.bar(weekly_report_df.index, weekly_report_df["Good Scan (%)"], color=bar_colors2)
+            ax2.set_xlabel("Year-Week")
+            ax2.set_ylabel("Percentage of Good Scans")
+            ax2.set_title("Weekly Good Scan Report")
+            
+            # Use Year-Week as x-tick labels
+            ax2.set_xticks(weekly_report_df.index)
+            ax2.set_xticklabels(weekly_report_df["Year-Week"], rotation=45)
+            ax2.set_ylim(0, 100)
+            
+            # Threshold line
+            ax2.axhline(y=threshold, color='gray', linestyle='--', label="Threshold")
+            ax2.legend()
+            
+            plt.tight_layout()
+            st.pyplot(fig2)
+            
+            st.dataframe(weekly_report_df)
+        else:
+            st.info("No data found for the selected date range.")
+    
 else:
-    st.write("Please upload a `.txt` file to generate the monthly report and chart.")
+    st.write("Please upload a `.txt` file to generate the monthly and weekly reports.")
